@@ -25,6 +25,9 @@ export async function getCommand(
 
   if (isValidShortId(query)) {
     entry = getEntryByShortId(db, query)
+    if (entry && options.type && entry.type !== options.type) {
+      entry = null
+    }
   }
 
   if (!entry) {

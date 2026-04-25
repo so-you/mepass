@@ -23,7 +23,14 @@ esac
 
 case "$ARCH" in
   x86_64|amd64) ARCH="x64" ;;
-  arm64|aarch64) ARCH="arm64" ;;
+  arm64|aarch64)
+    if [ "$OS" = "darwin" ]; then
+      ARCH="arm64"
+    else
+      echo "Linux ARM64 暂不支持"
+      exit 1
+    fi
+    ;;
   *)
     echo "不支持的架构: $ARCH"
     exit 1
