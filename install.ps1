@@ -22,6 +22,7 @@ Write-Host "最新版本: $Latest"
 $Artifact = "mepass-windows-x64.zip"
 $DownloadUrl = "https://github.com/$Repo/releases/download/$Latest/$Artifact"
 $TempFile = "$env:TEMP\$Artifact"
+$TempDir = "$env:TEMP\mepass-install"
 
 Write-Host "正在下载 $Artifact..."
 Invoke-WebRequest -Uri $DownloadUrl -OutFile $TempFile
@@ -30,9 +31,11 @@ Invoke-WebRequest -Uri $DownloadUrl -OutFile $TempFile
 Write-Host "正在安装到 $InstallDir..."
 if (Test-Path $InstallDir) { Remove-Item -Recurse -Force $InstallDir }
 New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
+if (Test-Path $TempDir) { Remove-Item -Recurse -Force $TempDir }
+New-Item -ItemType Directory -Force -Path $TempDir | Out-Null
 
-Expand-Archive -Path $TempFile -DestinationPath $TempFile -Force
-Copy-Item -Recurse "$TempFile\mepass\*" $InstallDir
+Expand-Archive -Path $TempFile -DestinationPath $TempDir -Force
+Copy-Item -Recurse "$TempDir\mepass\*" $InstallDir
 
 # Create launcher
 New-Item -ItemType Directory -Force -Path $BinDir | Out-Null
@@ -48,7 +51,7 @@ if ($UserPath -notlike "*$BinDir*") {
 
 # Cleanup
 Remove-Item -Force $TempFile
-Remove-Item -Recurse -Force "$env:TEMP\mepass" -ErrorAction SilentlyContinue
+Remove-Item -Recurse -Force $TempDir -ErrorAction SilentlyContinue
 
 Write-Host ""
 Write-Host "安装完成！" -ForegroundColor Green
