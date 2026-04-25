@@ -1,0 +1,44 @@
+{
+  "name": "mepass",
+  "version": "1.0.0",
+  "description": "本地密码与敏感信息管理 CLI 工具",
+  "type": "module",
+  "bin": {
+    "mepass": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "start": "node dist/cli.js",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/so-you/mepass.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/so-you/mepass/issues"
+  },
+  "homepage": "https://github.com/so-you/mepass#readme",
+  "dependencies": {
+    "@inquirer/prompts": "^8.4.2",
+    "cli-table3": "^0.6.5",
+    "clipboardy": "^5.3.1",
+    "commander": "^14.0.3",
+    "sql.js": "^1.14.1",
+    "uuid": "^14.0.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/uuid": "^10.0.0",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.5"
+  }
+}
