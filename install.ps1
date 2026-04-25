@@ -9,33 +9,52 @@ $BinDir = "$env:APPDATA\mePass\bin"
 Write-Host "mePass 安装程序" -ForegroundColor Cyan
 Write-Host "================"
 
-# Get latest release
-Write-Host "正在获取最新版本..."
-$Latest = (Invoke-RestMethod "https://api.github.com/repos/$Repo/releases/latest").tag_name
-if (-not $Latest) {
-    Write-Host "无法获取最新版本" -ForegroundColor Red
+# Check Node.js
+$nodeExe = Get-Command node -ErrorAction SilentlyContinue
+if (-not $nodeExe) {
+    Write-Host "错误：未检测到 Node.js，请先安装 Node.js 20+" -ForegroundColor Red
+    Write-Host "  https://nodejs.org/"
     exit 1
 }
-Write-Host "最新版本: $Latest"
 
-# Download
-$Artifact = "mepass-windows-x64.zip"
-$DownloadUrl = "https://github.com/$Repo/releases/download/$Latest/$Artifact"
-$TempFile = "$env:TEMP\$Artifact"
-$TempDir = "$env:TEMP\mepass-install"
+$nodeVersion = (node -v) -replace 'v','' -split '\.' | Select-Object -First 1
+if ([int]$nodeVersion -lt 20) {
+    Write-Host "错误：Node.js 版本过低（当前 $(node -v)），需要 20+" -ForegroundColor Red
+    exit 1
+}
 
-Write-Host "正在下载 $Artifact..."
-Invoke-WebRequest -Uri $DownloadUrl -OutFile $TempFile
+Write-Host "Node.js: $(node -v) ✓"
 
-# Install
-Write-Host "正在安装到 $InstallDir..."
+# Check git
+$gitExe = Get-Command git -ErrorAction SilentlyContinue
+if (-not $gitExe) {
+    Write-Host "错误：未检测到 git，请先安装 git" -ForegroundColor Red
+    exit 1
+}
+
+# Get latest version
+Write-Host "正在获取最新版本..."
+try {
+    $Latest = (Invoke-RestMethod "https://api.github.com/repos/$Repo/releases/latest").tag_name
+    Write-Host "最新版本: $Latest"
+} catch {
+    $Latest = "main"
+    Write-Host "使用 main 分支"
+}
+
+# Clone and build
+Write-Host "正在下载源码..."
 if (Test-Path $InstallDir) { Remove-Item -Recurse -Force $InstallDir }
-New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
-if (Test-Path $TempDir) { Remove-Item -Recurse -Force $TempDir }
-New-Item -ItemType Directory -Force -Path $TempDir | Out-Null
+git clone --depth 1 --branch $Latest "https://github.com/$Repo.git" $InstallDir
 
-Expand-Archive -Path $TempFile -DestinationPath $TempDir -Force
-Copy-Item -Recurse "$TempDir\mepass\*" $InstallDir
+Write-Host "正在安装依赖..."
+Push-Location $InstallDir
+npm ci --omit=dev 2>$null
+if ($LASTEXITCODE -ne 0) { npm install --omit=dev }
+
+Write-Host "正在编译..."
+npx tsc
+Pop-Location
 
 # Create launcher
 New-Item -ItemType Directory -Force -Path $BinDir | Out-Null
@@ -48,10 +67,6 @@ if ($UserPath -notlike "*$BinDir*") {
     [Environment]::SetEnvironmentVariable("Path", "$UserPath;$BinDir", "User")
     Write-Host "已添加到用户 PATH"
 }
-
-# Cleanup
-Remove-Item -Force $TempFile
-Remove-Item -Recurse -Force $TempDir -ErrorAction SilentlyContinue
 
 Write-Host ""
 Write-Host "安装完成！" -ForegroundColor Green

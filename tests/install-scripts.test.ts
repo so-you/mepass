@@ -2,19 +2,21 @@ import { describe, expect, it } from 'vitest'
 import fs from 'node:fs'
 
 describe('install scripts', () => {
-  it('macOS/Linux installer references the release artifact naming convention', () => {
+  it('macOS/Linux installer clones from git and builds locally', () => {
     const script = fs.readFileSync('install.sh', 'utf8')
 
-    expect(script).toContain('ARTIFACT="mepass-${PLATFORM}-${ARCH}.tar.gz"')
-    expect(script).toContain('https://github.com/${REPO}/releases/download/${LATEST}/${ARTIFACT}')
+    expect(script).toContain('git clone')
+    expect(script).toContain('npm ci --omit=dev')
+    expect(script).toContain('npx tsc')
+    expect(script).toContain('node "${INSTALL_DIR}/dist/cli.js"')
   })
 
-  it('Windows installer extracts zip into a directory, not into the zip file path', () => {
+  it('Windows installer clones from git and builds locally', () => {
     const script = fs.readFileSync('install.ps1', 'utf8')
 
-    expect(script).toContain('$TempDir = "$env:TEMP\\mepass-install"')
-    expect(script).toContain('Expand-Archive -Path $TempFile -DestinationPath $TempDir -Force')
-    expect(script).toContain('Copy-Item -Recurse "$TempDir\\mepass\\*" $InstallDir')
+    expect(script).toContain('git clone')
+    expect(script).toContain('npm ci --omit=dev')
+    expect(script).toContain('npx tsc')
+    expect(script).toContain('%APPDATA%\\mePass\\app\\dist\\cli.js')
   })
 })
-
