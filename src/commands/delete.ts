@@ -1,9 +1,9 @@
 import { input } from '@inquirer/prompts'
 import { getDb } from '../db/connection.js'
-import { getEntryByShortId, deleteEntry } from '../db/entries-repository.js'
+import { getEntryByShortId, deleteEntry, isInitialized } from '../db/entries-repository.js'
 import { isValidShortId } from '../core/short-id.js'
 import { MePassError, ENTRY_TYPE_LABELS } from '../types/entry.js'
-import { isInitialized } from '../db/entries-repository.js'
+import { requireMasterPassword } from './ensure-key.js'
 
 export async function deleteCommand(shortId: string): Promise<void> {
   if (!isValidShortId(shortId)) {
@@ -28,6 +28,8 @@ export async function deleteCommand(shortId: string): Promise<void> {
   if (entry.baseurl) console.log(`  Base URL: ${entry.baseurl}`)
   console.log(`  标签: ${entry.tags}`)
   console.log('')
+
+  await requireMasterPassword(db)
 
   const confirmation = await input({ message: '确认删除？输入 yes 确认' })
   if (confirmation.toLowerCase() !== 'yes') {

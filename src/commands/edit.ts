@@ -1,11 +1,10 @@
 import { input, password } from '@inquirer/prompts'
 import { getDb } from '../db/connection.js'
-import { ensureDataKey } from './ensure-key.js'
-import { getEntryByShortId, updateEntry } from '../db/entries-repository.js'
+import { requireMasterPassword } from './ensure-key.js'
+import { getEntryByShortId, updateEntry, isInitialized } from '../db/entries-repository.js'
 import { normalizeTags } from '../core/tags.js'
 import { isValidShortId } from '../core/short-id.js'
 import { MePassError, ENTRY_TYPE_LABELS, type EntryType } from '../types/entry.js'
-import { isInitialized } from '../db/entries-repository.js'
 
 export async function editCommand(shortId: string): Promise<void> {
   if (!isValidShortId(shortId)) {
@@ -22,7 +21,7 @@ export async function editCommand(shortId: string): Promise<void> {
     throw new MePassError('NOT_FOUND', `未找到 short_id: ${shortId}`)
   }
 
-  const { dataKey } = (await ensureDataKey(db))!
+  const dataKey = await requireMasterPassword(db)
 
   console.log(`\n编辑记录 [${entry.shortId}] ${ENTRY_TYPE_LABELS[entry.type]} - ${entry.name}`)
   console.log('提示：直接回车保留原值\n')

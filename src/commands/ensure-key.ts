@@ -9,6 +9,34 @@ import { saveDb } from '../db/connection.js'
 
 export type EnsureKeyResult = { dataKey: Buffer; rebinded?: boolean }
 
+export async function requireMasterPassword(db: Database): Promise<Buffer> {
+  console.log('请输入主密码以验证身份。')
+  const masterPwd = await password({ message: '主密码', mask: '*' })
+
+  const saltBase64 = getMeta(db, 'kdf_salt')
+  const kdfParamsStr = getMeta(db, 'kdf_params')
+  const encCipher = getMeta(db, 'encrypted_data_key_cipher')
+  const encIv = getMeta(db, 'encrypted_data_key_iv')
+  const encTag = getMeta(db, 'encrypted_data_key_auth_tag')
+
+  if (!saltBase64 || !kdfParamsStr || !encCipher || !encIv || !encTag) {
+    throw new MePassError('KEY_MISSING', '找不到可用解密材料，请检查数据库完整性')
+  }
+
+  const salt = Buffer.from(saltBase64, 'base64')
+  const kdfParams = JSON.parse(kdfParamsStr)
+  const kek = deriveKeyEncryptionKey(masterPwd, salt, kdfParams)
+
+  try {
+    return decryptDataKey(
+      { cipher: encCipher, iv: encIv, authTag: encTag },
+      kek
+    )
+  } catch {
+    throw new MePassError('DECRYPT_FAILED', '主密码错误')
+  }
+}
+
 export async function ensureDataKey(db: Database): Promise<EnsureKeyResult | null> {
   if (!isInitialized(db)) {
     return null
