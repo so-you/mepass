@@ -49,11 +49,15 @@ git clone --depth 1 --branch $Latest "https://github.com/$Repo.git" $InstallDir
 
 Write-Host "正在安装依赖..."
 Push-Location $InstallDir
-npm ci --omit=dev 2>$null
-if ($LASTEXITCODE -ne 0) { npm install --omit=dev }
+npm ci 2>$null
+if ($LASTEXITCODE -ne 0) { npm install }
 
 Write-Host "正在编译..."
-npx tsc
+./node_modules/.bin/tsc
+if ($LASTEXITCODE -ne 0) { node node_modules/typescript/bin/tsc }
+
+Write-Host "正在清理开发依赖..."
+npm prune --omit=dev
 Pop-Location
 
 # Create launcher

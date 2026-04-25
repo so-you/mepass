@@ -41,10 +41,13 @@ git clone --depth 1 --branch "${LATEST}" "https://github.com/${REPO}.git" "${INS
 
 echo "正在安装依赖..."
 cd "${INSTALL_DIR}"
-npm ci --omit=dev 2>/dev/null || npm install --omit=dev
+npm ci 2>/dev/null || npm install
 
 echo "正在编译..."
-npx tsc
+./node_modules/.bin/tsc
+
+echo "正在清理开发依赖..."
+npm prune --omit=dev
 
 # Create bin wrapper
 mkdir -p "${BIN_DIR}"

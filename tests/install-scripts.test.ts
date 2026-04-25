@@ -6,8 +6,9 @@ describe('install scripts', () => {
     const script = fs.readFileSync('install.sh', 'utf8')
 
     expect(script).toContain('git clone')
-    expect(script).toContain('npm ci --omit=dev')
-    expect(script).toContain('npx tsc')
+    expect(script).toContain('npm ci')
+    expect(script).toContain('./node_modules/.bin/tsc')
+    expect(script).toContain('npm prune --omit=dev')
     expect(script).toContain('node "${INSTALL_DIR}/dist/cli.js"')
   })
 
@@ -15,8 +16,9 @@ describe('install scripts', () => {
     const script = fs.readFileSync('install.ps1', 'utf8')
 
     expect(script).toContain('git clone')
-    expect(script).toContain('npm ci --omit=dev')
-    expect(script).toContain('npx tsc')
+    expect(script).toContain('npm ci')
+    expect(script).toContain('node_modules/typescript/bin/tsc')
+    expect(script).toContain('npm prune --omit=dev')
     expect(script).toContain('%APPDATA%\\mePass\\app\\dist\\cli.js')
   })
 })
