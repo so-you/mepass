@@ -116,9 +116,13 @@ async function showEntryTable(entry: Entry, db: Database): Promise<void> {
   rows.push(['标签', entry.tags])
   rows.push(['更新时间', formatTime(entry.updatedAt)])
 
+  // 计算值列宽度：终端宽度 - 字段列(15) - 边框和间距(7)
+  const termWidth = process.stdout.columns || 120
+  const valueColWidth = Math.max(termWidth - 22, 40)
+
   const table = new Table({
     head: ['字段', '值'],
-    colWidths: [15, 60],
+    colWidths: [15, valueColWidth],
     wordWrap: true,
   })
 
