@@ -1,0 +1,132 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            platform: darwin
+            arch: arm64
+            artifact: mepass-darwin-arm64.tar.gz
+          - os: macos-13
+            platform: darwin
+            arch: x64
+            artifact: mepass-darwin-x64.tar.gz
+          - os: ubuntu-latest
+            platform: linux
+            arch: x64
+            artifact: mepass-linux-x64.tar.gz
+          - os: windows-latest
+            platform: windows
+            arch: x64
+            artifact: mepass-windows-x64.zip
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install all dependencies (for build)
+        run: npm ci
+
+      - name: Run tests
+        run: npx vitest run
+
+      - name: Build TypeScript
+        run: npx tsc
+
+      - name: Package (macOS/Linux)
+        if: runner.os != 'Windows'
+        run: |
+          mkdir -p pkg/mepass
+          # Copy dist
+          cp -r dist pkg/mepass/
+          # Install production-only dependencies
+          cp package.json pkg/mepass/
+          cp package-lock.json pkg/mepass/ 2>/dev/null || true
+          cd pkg/mepass && npm ci --omit=dev && cd ../..
+          # Ensure ESM
+          sed -i 's/"type": "module"/"type": "module"/' pkg/mepass/package.json || true
+          # Archive
+          tar -czf ${{ matrix.artifact }} -C pkg mepass
+
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path pkg\mepass
+          Copy-Item -Recurse dist pkg\mepass\
+          Copy-Item package.json pkg\mepass\
+          Copy-Item package-lock.json pkg\mepass\ -ErrorAction SilentlyContinue
+          Push-Location pkg\mepass
+          npm ci --omit=dev
+          Pop-Location
+          Compress-Archive -Path pkg\mepass -DestinationPath ${{ matrix.artifact }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mepass-${{ matrix.platform }}-${{ matrix.arch }}
+          path: ${{ matrix.artifact }}
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Prepare release files
+        run: |
+          mkdir -p release
+          find artifacts -name "*.tar.gz" -exec cp {} release/ \;
+          find artifacts -name "*.zip" -exec cp {} release/ \;
+          ls -la release/
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/*
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+          body: |
+            ## mePass - 本地密码与敏感信息管理工具
+
+            ### 安装
+
+            **macOS / Linux:**
+            ```bash
+            curl -fsSL https://raw.githubusercontent.com/so-you/mepass/main/install.sh | bash
+            ```
+
+            **Windows (PowerShell):**
+            ```powershell
+            irm https://raw.githubusercontent.com/so-you/mepass/main/install.ps1 | iex
+            ```
+
+            ### 前置要求
+            - Node.js 20+
+
+            ### 手动安装
+            1. 从下方下载对应平台的压缩包
+            2. 解压到 `~/.mepass/`
+            3. 创建启动脚本：`echo '#!/usr/bin/env bash\nexec node ~/.mepass/dist/cli.js "$@"' > /usr/local/bin/mepass && chmod +x /usr/local/bin/mepass`

@@ -1,3 +1,10 @@
+# Build artifacts
+sea-prep.blob
+sea-config.json
+/mepass
+/mepass.exe
+/pkg/
+
 # Logs
 logs
 *.log
