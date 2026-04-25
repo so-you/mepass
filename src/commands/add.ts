@@ -1,4 +1,4 @@
-import { input, password } from '@inquirer/prompts'
+import { input } from '@inquirer/prompts'
 import { getDb } from '../db/connection.js'
 import { ensureDataKey } from './ensure-key.js'
 import { insertEntry } from '../db/entries-repository.js'
@@ -51,7 +51,7 @@ export async function addCommand(typeStr: string): Promise<void> {
 async function collectAccountFields(type: EntryType): Promise<Record<string, string | null>> {
   const name = await input({ message: `名称（平台/服务名）` })
   const username = await input({ message: '用户名/邮箱' })
-  const pwd = await password({ message: '密码', mask: '*' })
+  const pwd = await input({ message: '密码' })
   const url = await input({ message: '网址（可选，回车跳过）' })
   const remark = await input({ message: '备注（可选，回车跳过）' })
   const tags = await input({ message: '标签（可选，逗号分隔，回车跳过）' })
@@ -68,7 +68,7 @@ async function collectAccountFields(type: EntryType): Promise<Record<string, str
 async function collectApiKeyFields(): Promise<Record<string, string | null>> {
   const name = await input({ message: '名称（服务名）' })
   const baseurl = await input({ message: 'Base URL' })
-  const apikey = await password({ message: 'API Key', mask: '*' })
+  const apikey = await input({ message: 'API Key' })
   const remark = await input({ message: '备注（可选，回车跳过）' })
   const tags = await input({ message: '标签（可选，逗号分隔，回车跳过）' })
   return {

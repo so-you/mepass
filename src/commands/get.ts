@@ -1,11 +1,12 @@
-import { select } from '@inquirer/prompts'
 import { getDb } from '../db/connection.js'
+import type { Database } from 'sql.js'
 import { ensureDataKey } from './ensure-key.js'
 import { getEntryByShortId, searchEntries, updateLastAccessed, decryptEntryField } from '../db/entries-repository.js'
 import { isValidShortId } from '../core/short-id.js'
 import { copyToClipboard } from '../platform/clipboard.js'
 import { MePassError, ENTRY_TYPE_LABELS, type EntryType, type Entry } from '../types/entry.js'
 import { isInitialized } from '../db/entries-repository.js'
+import Table from 'cli-table3'
 
 export async function getCommand(
   query: string,
@@ -38,12 +39,9 @@ export async function getCommand(
     if (results.length === 1) {
       entry = results[0]
     } else {
-      const choices = results.map(e => ({
-        name: `[${e.shortId}] ${ENTRY_TYPE_LABELS[e.type]} ${e.name} ${e.username || e.baseurl || ''} ${e.tags}`,
-        value: e.shortId,
-      }))
-      const selected = await select({ message: '找到多条记录，请选择：', choices })
-      entry = getEntryByShortId(db, selected)
+      // 多条结果：用表格展示
+      showResultsTable(results)
+      return
     }
   }
 
@@ -53,7 +51,21 @@ export async function getCommand(
 
   updateLastAccessed(db, entry.shortId)
 
+  if (options.copy) {
+    const { dataKey } = (await ensureDataKey(db))!
+    const field = options.copy as 'password' | 'apikey' | 'note'
+    const plain = decryptField(entry, field, dataKey)
+    if (plain) {
+      await copyToClipboard(plain)
+      console.log(`✓ ${field} 已复制到剪贴板（60秒后自动清除）`)
+    } else {
+      console.log(`该记录没有 ${field} 字段`)
+    }
+    return
+  }
+
   if (options.json) {
+    const { dataKey } = (await ensureDataKey(db))!
     const output: Record<string, unknown> = {
       shortId: entry.shortId,
       type: entry.type,
@@ -67,69 +79,83 @@ export async function getCommand(
       updatedAt: entry.updatedAt,
       lastAccessedAt: entry.lastAccessedAt,
     }
-
-    if (options.reveal || options.copy) {
-      const { dataKey } = (await ensureDataKey(db))!
-      if (options.reveal) {
-        output.password = decryptField(entry, 'password', dataKey)
-        output.apikey = decryptField(entry, 'apikey', dataKey)
-        output.note = decryptField(entry, 'note', dataKey)
-      }
-      if (options.copy) {
-        const plain = decryptField(entry, options.copy as 'password' | 'apikey' | 'note', dataKey)
-        if (plain) {
-          await copyToClipboard(plain)
-          output[`${options.copy}Copied`] = true
-        }
-      }
-    } else {
-      output.password = entry.passwordCipher ? '••••••' : null
-      output.apikey = entry.apikeyCipher ? '••••••' : null
-      output.note = entry.noteCipher ? '••••••' : null
-    }
-
+    output.password = decryptField(entry, 'password', dataKey)
+    output.apikey = decryptField(entry, 'apikey', dataKey)
+    output.note = decryptField(entry, 'note', dataKey)
     console.log(JSON.stringify(output, null, 2))
     return
   }
 
-  console.log('')
-  console.log(`  Short ID: ${entry.shortId}`)
-  console.log(`  类型: ${ENTRY_TYPE_LABELS[entry.type]}`)
-  console.log(`  名称: ${entry.name}`)
-  if (entry.username) console.log(`  用户名: ${entry.username}`)
-  if (entry.baseurl) console.log(`  Base URL: ${entry.baseurl}`)
-  if (entry.url) console.log(`  URL: ${entry.url}`)
-  if (entry.remark) console.log(`  备注: ${entry.remark}`)
-  console.log(`  标签: ${entry.tags}`)
+  // 单条结果：明文展示所有字段（含敏感字段）
+  showEntryTable(entry, db)
+}
 
-  if (options.reveal || options.copy) {
-    const { dataKey } = (await ensureDataKey(db))!
+async function showEntryTable(entry: Entry, db: Database): Promise<void> {
+  const { dataKey } = (await ensureDataKey(db))!
 
-    if (options.reveal) {
-      const pwd = decryptField(entry, 'password', dataKey)
-      const apikey = decryptField(entry, 'apikey', dataKey)
-      const note = decryptField(entry, 'note', dataKey)
-      if (pwd) console.log(`  密码: ${pwd}`)
-      if (apikey) console.log(`  API Key: ${apikey}`)
-      if (note) console.log(`  笔记: ${note}`)
-    }
+  const rows: string[][] = []
 
-    if (options.copy) {
-      const plain = decryptField(entry, options.copy as 'password' | 'apikey' | 'note', dataKey)
-      if (plain) {
-        await copyToClipboard(plain)
-        console.log(`  ✓ ${options.copy} 已复制到剪贴板（60秒后自动清除）`)
-      } else {
-        console.log(`  该记录没有 ${options.copy} 字段`)
-      }
-    }
-  } else {
-    if (entry.passwordCipher) console.log('  密码: ••••••')
-    if (entry.apikeyCipher) console.log('  API Key: ••••••')
-    if (entry.noteCipher) console.log('  笔记: ••••••')
+  rows.push(['Short ID', entry.shortId])
+  rows.push(['类型', ENTRY_TYPE_LABELS[entry.type]])
+  rows.push(['名称', entry.name])
+  if (entry.username) rows.push(['用户名', entry.username])
+  if (entry.baseurl) rows.push(['Base URL', entry.baseurl])
+  if (entry.url) rows.push(['URL', entry.url])
+
+  // 敏感字段明文显示
+  const pwd = decryptField(entry, 'password', dataKey)
+  if (pwd) rows.push(['密码', pwd])
+
+  const apikey = decryptField(entry, 'apikey', dataKey)
+  if (apikey) rows.push(['API Key', apikey])
+
+  const note = decryptField(entry, 'note', dataKey)
+  if (note) rows.push(['笔记', note])
+
+  if (entry.remark) rows.push(['备注', entry.remark])
+  rows.push(['标签', entry.tags])
+  rows.push(['更新时间', formatTime(entry.updatedAt)])
+
+  const table = new Table({
+    head: ['字段', '值'],
+    colWidths: [15, 60],
+    wordWrap: true,
+  })
+
+  for (const [field, value] of rows) {
+    table.push([field, value])
   }
 
-  console.log(`  更新时间: ${formatTime(entry.updatedAt)}`)
+  console.log('')
+  console.log(table.toString())
+  console.log('')
+  console.log('提示: 使用 --copy <字段> 复制敏感字段到剪贴板')
+}
+
+function showResultsTable(entries: Entry[]): void {
+  const table = new Table({
+    head: ['#', 'Short ID', '类型', '名称', '用户名', 'Base URL', '标签'],
+    colWidths: [4, 10, 10, 20, 20, 25, 25],
+    wordWrap: true,
+  })
+
+  entries.forEach((e, i) => {
+    table.push([
+      (i + 1).toString(),
+      e.shortId,
+      ENTRY_TYPE_LABELS[e.type],
+      e.name,
+      e.username || '',
+      e.baseurl || '',
+      e.tags,
+    ])
+  })
+
+  console.log('')
+  console.log(`找到 ${entries.length} 条匹配记录：`)
+  console.log(table.toString())
+  console.log('')
+  console.log('使用 mepass get <short_id> 查看指定记录详情')
 }
 
 function decryptField(entry: Entry, field: 'password' | 'apikey' | 'note', dataKey: Buffer): string | null {
