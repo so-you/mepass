@@ -1,0 +1,59 @@
+import { password } from '@inquirer/prompts'
+import type { Database } from 'sql.js'
+import { getKey, saveKey } from '../core/key-store.js'
+import { getMeta, isInitialized, hasEncryptedDataKey } from '../db/entries-repository.js'
+import { deriveKeyEncryptionKey, decryptDataKey } from '../core/crypto.js'
+import { MePassError } from '../types/entry.js'
+import { setMeta } from '../db/entries-repository.js'
+import { saveDb } from '../db/connection.js'
+
+export type EnsureKeyResult = { dataKey: Buffer; rebinded?: boolean }
+
+export async function ensureDataKey(db: Database): Promise<EnsureKeyResult | null> {
+  if (!isInitialized(db)) {
+    return null
+  }
+
+  const localKey = await getKey()
+  if (localKey) {
+    return { dataKey: localKey }
+  }
+
+  if (!hasEncryptedDataKey(db)) {
+    return null
+  }
+
+  console.log('本机密钥缺失，请输入主密码以解锁。')
+  const masterPwd = await password({ message: '主密码', mask: '*' })
+
+  const saltBase64 = getMeta(db, 'kdf_salt')
+  const kdfParamsStr = getMeta(db, 'kdf_params')
+  const encCipher = getMeta(db, 'encrypted_data_key_cipher')
+  const encIv = getMeta(db, 'encrypted_data_key_iv')
+  const encTag = getMeta(db, 'encrypted_data_key_auth_tag')
+
+  if (!saltBase64 || !kdfParamsStr || !encCipher || !encIv || !encTag) {
+    throw new MePassError('KEY_MISSING', '找不到可用解密材料，请检查数据库完整性')
+  }
+
+  const salt = Buffer.from(saltBase64, 'base64')
+  const kdfParams = JSON.parse(kdfParamsStr)
+  const kek = deriveKeyEncryptionKey(masterPwd, salt, kdfParams)
+
+  let dataKey: Buffer
+  try {
+    dataKey = decryptDataKey(
+      { cipher: encCipher, iv: encIv, authTag: encTag },
+      kek
+    )
+  } catch {
+    throw new MePassError('DECRYPT_FAILED', '主密码错误或数据已损坏')
+  }
+
+  const keySource = await saveKey(dataKey)
+  setMeta(db, 'key_source', keySource)
+  saveDb()
+
+  console.log('解锁成功，已绑定当前设备。')
+  return { dataKey, rebinded: true }
+}

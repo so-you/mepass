@@ -2,7 +2,7 @@ import initSqlJs, { Database } from 'sql.js'
 import fs from 'node:fs'
 import path from 'node:path'
 import { getDbPath, ensureDataDir } from '../platform/paths.js'
-import { SCHEMA_SQL } from './schema.sql.js'
+import { SCHEMA_SQL } from './schema.js'
 
 let dbInstance: Database | null = null
 let dbPath: string | null = null
