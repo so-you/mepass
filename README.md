@@ -9,7 +9,7 @@ mePass 支持 macOS、Linux、Windows。
 - 本地优先：不依赖云端账户，不内置云同步。
 - 跨平台：macOS、Linux、Windows 使用一致的 CLI 体验。
 - 可迁移：初始化时设置用户主密码，迁移数据库到新设备后可通过主密码恢复访问。
-- 免重复输入：本机完成密钥绑定后，日常新增、查询、复制、删除无需反复输入主密码。
+- 免重复输入：本机完成密钥绑定后，日常新增、查询、复制无需反复输入主密码。编辑和删除始终需要主密码验证。
 - 明文检索：`username`、`baseurl`、`url`、`remark`、`tags` 支持模糊查询。
 - 加密存储：`password`、`apikey`、`note` 加密存储。
 - 标签管理：标签使用英文逗号分隔，例如 `ai,openai,work`。
@@ -166,13 +166,7 @@ mepass get openai
 mepass get 112783
 ```
 
-显示敏感字段明文：
-
-```shell
-mepass get 112783 --reveal
-```
-
-复制敏感字段到剪贴板：
+单条结果默认展示敏感字段明文。复制敏感字段到剪贴板：
 
 ```shell
 mepass get openai --copy apikey
@@ -192,7 +186,7 @@ mepass edit --id 112783
 mepass delete --id 112783
 ```
 
-删除前需要输入 `yes` 确认。
+删除前需要输入主密码验证身份，再输入 `yes` 确认。
 
 ### 7. 查看状态
 
@@ -202,6 +196,14 @@ mepass status
 
 状态命令会显示数据目录、数据库路径、配置路径、密钥来源和记录数量。
 
+### 8. 备份数据库
+
+```shell
+mepass backup
+```
+
+备份数据库文件，按日期命名（如 `mepass-2026-04-26.db`），同一天重复执行覆盖当天备份。
+
 ## 命令参考
 
 ```text
@@ -209,10 +211,11 @@ mepass init
 mepass add --type <account|email|api_key|note>
 mepass add -a|-e|-k|-n
 mepass list [--type type] [--tag tag] [--query keyword] [--limit n] [--offset n] [--json]
-mepass get <keyword|short_id> [--type type] [--reveal] [--copy password|apikey|note] [--json]
+mepass get <keyword|short_id> [--type type] [--copy password|apikey|note] [--json]
 mepass edit --id short_id
 mepass delete --id short_id
 mepass status
+mepass backup
 ```
 
 ## 数据模型

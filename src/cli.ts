@@ -8,6 +8,7 @@ import { getCommand } from './commands/get.js'
 import { editCommand } from './commands/edit.js'
 import { deleteCommand } from './commands/delete.js'
 import { statusCommand } from './commands/status.js'
+import { backupCommand } from './commands/backup.js'
 import { MePassError } from './types/entry.js'
 
 const program = new Command()
@@ -139,6 +140,12 @@ program
   .description('显示数据库路径、密钥来源和记录统计')
   .usage('')
   .action(wrap(statusCommand))
+
+program
+  .command('backup')
+  .description('备份数据库（按日期命名，重复执行覆盖当天备份）')
+  .usage('')
+  .action(wrap(backupCommand))
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function wrap(fn: (...args: any[]) => Promise<void>): (...args: any[]) => Promise<void> {

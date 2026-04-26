@@ -26,7 +26,8 @@ irm https://raw.githubusercontent.com/so-you/mepass/main/install.ps1 | iex
 mepass init
 ```
 
-首次使用需要设置主密码。初始化完成后，同一设备上日常操作无需再次输入密码。
+首次使用需要设置主密码。初始化完成后，同一设备上日常查询操作无需再次输入密码。
+编辑和删除操作始终需要输入主密码验证身份。
 
 ## 信息类型
 
@@ -87,7 +88,7 @@ mepass add -n    # 快捷添加笔记
 |------|------|------|
 | 名称 | 是 | 平台或服务名称 |
 | 用户名 | 是 | 登录用户名或邮箱地址 |
-| 密码 | 是 | 登录密码（隐藏输入） |
+| 密码 | 是 | 登录密码（明文输入，便于确认） |
 | 网址 | 否 | 平台登录页地址 |
 | 备注 | 否 | 非敏感备注 |
 | 标签 | 否 | 逗号分隔，如 `work, dev` |
@@ -97,7 +98,7 @@ mepass add -n    # 快捷添加笔记
 |------|------|------|
 | 名称 | 是 | 服务名称 |
 | Base URL | 是 | API 基础地址 |
-| API Key | 是 | 密钥内容（隐藏输入） |
+| API Key | 是 | 密钥内容（明文输入，便于确认） |
 | 备注 | 否 | 非敏感备注 |
 | 标签 | 否 | 逗号分隔 |
 
@@ -150,13 +151,12 @@ mepass list --tag ai --json          # JSON 格式输出
 
 ### mepass get
 
-查询单条记录。支持 short_id 精确查询和关键字模糊查询。
+查询单条记录详情。支持 short_id 精确查询和关键字模糊查询。单条结果默认展示敏感字段明文（含密码、API Key、笔记）。
 
 ```bash
-mepass get 297198                    # 按 short_id 查询
+mepass get 297198                    # 按 short_id 查询（明文展示）
 mepass get openai                    # 模糊搜索
 mepass get gmail --type email        # 按类型限定搜索
-mepass get 297198 --reveal           # 显示敏感字段明文
 mepass get 297198 --copy apikey      # 复制字段到剪贴板
 mepass get openai --json             # JSON 格式输出
 ```
@@ -165,16 +165,15 @@ mepass get openai --json             # JSON 格式输出
 |------|------|
 | `<query>` | 查询关键字或 short_id（必填） |
 | `-t, --type <类型>` | 限定搜索类型 |
-| `--reveal` | 显示敏感字段明文（密码、API Key、笔记） |
 | `--copy <字段>` | 复制指定字段到剪贴板：password / apikey / note |
 | `--json` | JSON 格式输出 |
 
 行为说明：
 - 输入 6 位数字时按 short_id 精确查询
 - 输入其他内容时对 name、username、baseurl、url、remark、tags 模糊匹配
-- 多条匹配时进入选择列表
-- 默认敏感字段显示为 `••••••`
-- `--copy` 复制后 60 秒自动清除剪贴板，终端不打印明文
+- 多条匹配时以表格列表展示，请用 short_id 精确查询
+- 单条结果以键值对表格展示，敏感字段明文显示
+- `--copy` 复制后 60 秒自动清除剪贴板
 
 各类型可复制字段：
 
@@ -200,6 +199,7 @@ mepass edit --id 297198
 | `--id <short_id>` | 要编辑的记录 short_id（必填） |
 
 交互式编辑：
+- 需要输入主密码验证身份
 - 显示当前字段值
 - 直接回车保留原值
 - 输入新值则更新
@@ -222,7 +222,8 @@ mepass delete --id 297198
 
 执行流程：
 1. 显示记录摘要（非敏感字段）
-2. 要求输入 `yes` 确认
+2. 输入主密码验证身份
+3. 要求输入 `yes` 确认
 3. 输入其他内容则取消操作
 
 ---
@@ -242,6 +243,25 @@ mepass status
 - 密钥来源（系统钥匙串 / 本地密钥文件）
 - 总记录数
 - 各类型记录数
+
+---
+
+### mepass backup
+
+备份数据库文件。按日期命名，同一天重复执行会覆盖当天备份。
+
+```bash
+mepass backup
+```
+
+备份文件命名格式：`mepass-YYYY-MM-DD.db`，存放在数据目录下。
+
+示例：
+
+```
+mepass backup
+# 输出：备份完成: ~/Library/Application Support/mePass/mepass-2026-04-26.db
+```
 
 ---
 
@@ -293,5 +313,6 @@ Short ID 是 6 位数字，格式为 `[类型码][4位随机数][校验位]`。
 - 加密密钥通过 scrypt KDF 从主密码派生（信封加密）
 - macOS 使用 Keychain 保存密钥，Linux 使用 Secret Service，Windows 使用 Credential Manager
 - 系统钥匙串不可用时自动降级为本地 `vault.key` 文件（权限 0600）
-- 列表命令永不展示敏感字段明文
+- 列表命令永不展示敏感字段明文，查询单条记录时明文展示
+- 编辑和删除操作始终需要输入主密码验证身份
 - `--copy` 不在终端打印明文，60 秒后自动清除剪贴板
