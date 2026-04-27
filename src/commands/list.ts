@@ -2,6 +2,7 @@ import { getDb } from '../db/connection.js'
 import { listEntries } from '../db/entries-repository.js'
 import { isInitialized } from '../db/entries-repository.js'
 import { MePassError, ENTRY_TYPE_LABELS, type EntryType } from '../types/entry.js'
+import { validateType } from '../core/validation.js'
 import Table from 'cli-table3'
 
 export async function listCommand(options: {
@@ -15,6 +16,10 @@ export async function listCommand(options: {
   const db = await getDb()
   if (!isInitialized(db)) {
     throw new MePassError('NOT_INITIALIZED', '请先执行 mepass init')
+  }
+
+  if (options.type) {
+    validateType(options.type)
   }
 
   const entries = listEntries(db, {

@@ -3,6 +3,7 @@ import type { Database } from 'sql.js'
 import { ensureDataKey } from './ensure-key.js'
 import { getEntryByShortId, searchEntries, updateLastAccessed, decryptEntryField } from '../db/entries-repository.js'
 import { isValidShortId } from '../core/short-id.js'
+import { validateType } from '../core/validation.js'
 import { copyToClipboard } from '../platform/clipboard.js'
 import { MePassError, ENTRY_TYPE_LABELS, type EntryType, type Entry } from '../types/entry.js'
 import { isInitialized } from '../db/entries-repository.js'
@@ -17,6 +18,9 @@ export async function getCommand(
     json?: boolean
   }
 ): Promise<void> {
+  if (options.type) {
+    validateType(options.type)
+  }
   const db = await getDb()
   if (!isInitialized(db)) {
     throw new MePassError('NOT_INITIALIZED', '请先执行 mepass init')
@@ -65,7 +69,6 @@ export async function getCommand(
   }
 
   if (options.json) {
-    const { dataKey } = (await ensureDataKey(db))!
     const output: Record<string, unknown> = {
       shortId: entry.shortId,
       type: entry.type,
@@ -79,18 +82,21 @@ export async function getCommand(
       updatedAt: entry.updatedAt,
       lastAccessedAt: entry.lastAccessedAt,
     }
-    output.password = decryptField(entry, 'password', dataKey)
-    output.apikey = decryptField(entry, 'apikey', dataKey)
-    output.note = decryptField(entry, 'note', dataKey)
+    if (options.reveal) {
+      const { dataKey } = (await ensureDataKey(db))!
+      output.password = decryptField(entry, 'password', dataKey)
+      output.apikey = decryptField(entry, 'apikey', dataKey)
+      output.note = decryptField(entry, 'note', dataKey)
+    }
     console.log(JSON.stringify(output, null, 2))
     return
   }
 
-  // 单条结果：明文展示所有字段（含敏感字段）
-  showEntryTable(entry, db)
+  // 单条结果：展示详情
+  showEntryTable(entry, db, options.reveal)
 }
 
-async function showEntryTable(entry: Entry, db: Database): Promise<void> {
+async function showEntryTable(entry: Entry, db: Database, reveal?: boolean): Promise<void> {
   const { dataKey } = (await ensureDataKey(db))!
 
   const rows: string[][] = []
@@ -102,15 +108,15 @@ async function showEntryTable(entry: Entry, db: Database): Promise<void> {
   if (entry.baseurl) rows.push(['Base URL', entry.baseurl])
   if (entry.url) rows.push(['URL', entry.url])
 
-  // 敏感字段明文显示
+  // 敏感字段
   const pwd = decryptField(entry, 'password', dataKey)
-  if (pwd) rows.push(['密码', pwd])
+  if (pwd) rows.push(['密码', reveal ? pwd : '••••••'])
 
   const apikey = decryptField(entry, 'apikey', dataKey)
-  if (apikey) rows.push(['API Key', apikey])
+  if (apikey) rows.push(['API Key', reveal ? apikey : '••••••'])
 
   const note = decryptField(entry, 'note', dataKey)
-  if (note) rows.push(['笔记', note])
+  if (note) rows.push(['笔记', reveal ? note : '••••••'])
 
   if (entry.remark) rows.push(['备注', entry.remark])
   rows.push(['标签', entry.tags])
@@ -133,7 +139,7 @@ async function showEntryTable(entry: Entry, db: Database): Promise<void> {
   console.log('')
   console.log(table.toString())
   console.log('')
-  console.log('提示: 使用 --copy <字段> 复制敏感字段到剪贴板')
+  console.log('提示: 使用 --reveal 显示敏感字段明文，--copy <字段> 复制到剪贴板')
 }
 
 function showResultsTable(entries: Entry[]): void {

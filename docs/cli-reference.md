@@ -1,6 +1,6 @@
 # mePass 使用文档
 
-mePass 是一款本地 CLI 敏感信息管理工具，用于安全存储和快速查询账号密码、邮箱密码、API Key 和加密笔记。
+mePass 是一款面向开发者的本地 secret vault CLI 工具，用于安全管理 API Key、测试账号、恢复码和加密笔记。
 
 ## 快速开始
 
@@ -126,7 +126,7 @@ mepass add --type account
 
 ### mepass list
 
-列出记录，支持多条件筛选。默认不展示敏感字段。
+列出记录，支持多条件筛选。不展示敏感字段。
 
 ```bash
 mepass list                          # 列出所有记录
@@ -138,7 +138,7 @@ mepass list --tag ai --json          # JSON 格式输出
 
 | 参数 | 说明 |
 |------|------|
-| `-t, --type <类型>` | 按类型筛选：account / email / api_key / note |
+| `-t, --type <类型>` | 按类型筛选：account / email / api_key / note（非法类型报错） |
 | `--tag <标签>` | 按标签筛选（包含匹配） |
 | `-q, --query <关键字>` | 模糊搜索 name、username、baseurl、url、remark、tags |
 | `--limit <数量>` | 每页数量，默认 50 |
@@ -151,20 +151,23 @@ mepass list --tag ai --json          # JSON 格式输出
 
 ### mepass get
 
-查询单条记录详情。支持 short_id 精确查询和关键字模糊查询。单条结果默认展示敏感字段明文（含密码、API Key、笔记）。
+查询单条记录详情。敏感字段默认隐藏，使用 `--reveal` 显示明文。
 
 ```bash
-mepass get 297198                    # 按 short_id 查询（明文展示）
+mepass get 297198                    # 按 short_id 查询（敏感字段显示为 ••••••）
 mepass get openai                    # 模糊搜索
 mepass get gmail --type email        # 按类型限定搜索
+mepass get 297198 --reveal           # 显示敏感字段明文
 mepass get 297198 --copy apikey      # 复制字段到剪贴板
-mepass get openai --json             # JSON 格式输出
+mepass get 297198 --json             # JSON 输出（默认不含敏感字段）
+mepass get 297198 --reveal --json    # JSON 输出（含敏感字段）
 ```
 
 | 参数 | 说明 |
 |------|------|
 | `<query>` | 查询关键字或 short_id（必填） |
-| `-t, --type <类型>` | 限定搜索类型 |
+| `-t, --type <类型>` | 限定搜索类型（非法类型报错） |
+| `--reveal` | 显示敏感字段明文（密码、API Key、笔记） |
 | `--copy <字段>` | 复制指定字段到剪贴板：password / apikey / note |
 | `--json` | JSON 格式输出 |
 
@@ -172,8 +175,8 @@ mepass get openai --json             # JSON 格式输出
 - 输入 6 位数字时按 short_id 精确查询
 - 输入其他内容时对 name、username、baseurl、url、remark、tags 模糊匹配
 - 多条匹配时以表格列表展示，请用 short_id 精确查询
-- 单条结果以键值对表格展示，敏感字段明文显示
-- `--copy` 复制后 60 秒自动清除剪贴板
+- 单条结果以键值对表格展示，敏感字段默认显示为 `••••••`
+- `--copy` 复制后 60 秒自动清除剪贴板（仅当剪贴板内容未被替换时）
 
 各类型可复制字段：
 
@@ -210,7 +213,7 @@ mepass edit --id 297198
 
 ### mepass delete
 
-删除一条记录。需二次确认。
+删除一条记录。需主密码验证和二次确认。
 
 ```bash
 mepass delete --id 297198
@@ -224,7 +227,7 @@ mepass delete --id 297198
 1. 显示记录摘要（非敏感字段）
 2. 输入主密码验证身份
 3. 要求输入 `yes` 确认
-3. 输入其他内容则取消操作
+4. 输入其他内容则取消操作
 
 ---
 
@@ -260,7 +263,7 @@ mepass backup
 
 ```
 mepass backup
-# 输出：备份完成: ~/Library/Application Support/mePass/mepass-2026-04-26.db
+# 输出：备份完成: ~/Library/Application Support/mePass/mepass-2026-04-27.db
 ```
 
 ---
@@ -299,6 +302,8 @@ Short ID 是 6 位数字，格式为 `[类型码][4位随机数][校验位]`。
 3. 执行任意需要解密的命令时，输入主密码解锁
 4. 解锁成功后自动绑定新设备，后续无需再次输入
 
+如果目标设备已有旧的本地密钥，mePass 会自动检测密钥不匹配，引导输入主密码重新绑定。
+
 数据目录位置：
 
 | 平台 | 路径 |
@@ -311,8 +316,10 @@ Short ID 是 6 位数字，格式为 `[类型码][4位随机数][校验位]`。
 
 - password、apikey、note 使用 AES-256-GCM 加密存储
 - 加密密钥通过 scrypt KDF 从主密码派生（信封加密）
-- macOS 使用 Keychain 保存密钥，Linux 使用 Secret Service，Windows 使用 Credential Manager
+- 数据库写入采用原子操作（先写临时文件，再 rename），避免断电损坏
+- macOS 使用 Keychain 保存密钥，Linux 使用 Secret Service，Windows 使用 PowerShell CliXml 文件加密存储
 - 系统钥匙串不可用时自动降级为本地 `vault.key` 文件（权限 0600）
-- 列表命令永不展示敏感字段明文，查询单条记录时明文展示
+- `get` 命令默认隐藏敏感字段，需 `--reveal` 才显示明文
+- `--copy` 不在终端打印明文，60 秒后自动清除剪贴板（仅当内容未被替换时）
 - 编辑和删除操作始终需要输入主密码验证身份
-- `--copy` 不在终端打印明文，60 秒后自动清除剪贴板
+- 启动时自动验证本地缓存的密钥是否与当前数据库匹配，不匹配时引导重新绑定

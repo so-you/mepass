@@ -88,7 +88,7 @@ program
 
 program
   .command('get')
-  .description('查询记录详情（默认展示敏感字段明文）')
+  .description('查询记录详情（敏感字段默认隐藏）')
   .usage('<keyword|short_id> [选项]')
   .addHelpText('after', `
 查询方式:
@@ -96,15 +96,20 @@ program
   关键字模糊查询       mepass get openai
   限定类型查询         mepass get gmail --type email
 
+显示敏感字段:
+  mepass get 297198 --reveal          显示密码/API Key/笔记明文
+
 复制到剪贴板:
   mepass get 297198 --copy apikey     复制 API Key
   mepass get 297198 --copy password   复制密码
   mepass get 297198 --copy note       复制笔记
-  mepass get 297198 --json            JSON 格式输出
+  mepass get 297198 --json            JSON 格式输出（默认不含敏感字段）
+  mepass get 297198 --reveal --json   JSON 格式输出（含敏感字段）
 
 多条匹配时会以列表展示，请用 short_id 精确查询。`)
   .argument('<query>', 'short_id 或搜索关键字')
   .option('-t, --type <type>', '限定搜索类型 (account|email|api_key|note)')
+  .option('--reveal', '显示敏感字段明文（默认隐藏）')
   .option('--json', 'JSON 格式输出')
   .option('--copy <field>', '复制字段到剪贴板 (password|apikey|note)')
   .action(wrap(async (query: string, opts: { type?: string; reveal?: boolean; copy?: string; json?: boolean }) => {

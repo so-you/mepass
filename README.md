@@ -1,6 +1,6 @@
 # mePass
 
-mePass 是一款面向个人开发者和命令行用户的本地密码与敏感信息管理 CLI 工具。它用于管理账号密码、邮箱密码、API Key 和加密笔记，数据保存在本机 SQLite 数据库中，`password`、`apikey`、`note` 使用 AES-256-GCM 加密存储。
+mePass 是一款面向开发者的本地 secret vault CLI 工具。用于管理 API Key、测试账号、恢复码和加密笔记，数据保存在本机 SQLite 数据库中，`password`、`apikey`、`note` 使用 AES-256-GCM 加密存储。
 
 mePass 支持 macOS、Linux、Windows。
 
@@ -10,9 +10,12 @@ mePass 支持 macOS、Linux、Windows。
 - 跨平台：macOS、Linux、Windows 使用一致的 CLI 体验。
 - 可迁移：初始化时设置用户主密码，迁移数据库到新设备后可通过主密码恢复访问。
 - 免重复输入：本机完成密钥绑定后，日常新增、查询、复制无需反复输入主密码。编辑和删除始终需要主密码验证。
+- 安全默认值：敏感字段默认隐藏，显式 `--reveal` 才显示明文。
 - 明文检索：`username`、`baseurl`、`url`、`remark`、`tags` 支持模糊查询。
 - 加密存储：`password`、`apikey`、`note` 加密存储。
 - 标签管理：标签使用英文逗号分隔，例如 `ai,openai,work`。
+- 原子写入：数据库写入采用临时文件 + rename，避免断电损坏。
+- 密钥校验：启动时自动验证本地缓存密钥是否与数据库匹配。
 
 ## 安装
 
@@ -85,41 +88,39 @@ mepass init
 
 初始化时需要设置一次主密码。主密码用于迁移和恢复，不会直接保存明文。
 
-初始化完成后，mePass 会生成随机数据密钥，并将数据密钥绑定到当前设备。之后在同一台设备上执行日常命令时，不需要反复输入主密码。
+初始化完成后，mePass 会生成随机数据密钥，并将数据密钥绑定到当前设备。之后在同一台设备上执行日常命令时，不需要反复输入主密码。编辑和删除操作始终需要输入主密码验证身份。
 
 ### 2. 新增记录
+
+新增 API Key：
+
+```shell
+mepass add -k
+```
 
 新增账号密码：
 
 ```shell
-mepass add --type account
+mepass add -a
 ```
 
 新增邮箱密码：
 
 ```shell
-mepass add --type email
-```
-
-新增 API Key：
-
-```shell
-mepass add --type api_key
+mepass add -e
 ```
 
 新增加密笔记：
 
 ```shell
-mepass add --type note
+mepass add -n
 ```
 
-也可以使用快捷参数：
+也可以使用完整参数：
 
 ```shell
-mepass add -a   # account
-mepass add -e   # email
-mepass add -k   # api_key
-mepass add -n   # note
+mepass add --type api_key
+mepass add --type account
 ```
 
 ### 3. 列出记录
@@ -154,19 +155,19 @@ mepass list --json
 
 ### 4. 查询记录
 
-按关键字查询：
+按关键字查询（敏感字段默认隐藏）：
 
 ```shell
 mepass get openai
 ```
 
-按 short_id 查询：
+按 short_id 查询并显示敏感字段明文：
 
 ```shell
-mepass get 112783
+mepass get 112783 --reveal
 ```
 
-单条结果默认展示敏感字段明文。复制敏感字段到剪贴板：
+复制敏感字段到剪贴板：
 
 ```shell
 mepass get openai --copy apikey
@@ -180,13 +181,15 @@ mepass get recovery --copy note
 mepass edit --id 112783
 ```
 
+需要输入主密码验证身份。
+
 ### 6. 删除记录
 
 ```shell
 mepass delete --id 112783
 ```
 
-删除前需要输入主密码验证身份，再输入 `yes` 确认。
+需要输入主密码验证身份，再输入 `yes` 确认。
 
 ### 7. 查看状态
 
@@ -202,7 +205,7 @@ mepass status
 mepass backup
 ```
 
-备份数据库文件，按日期命名（如 `mepass-2026-04-26.db`），同一天重复执行覆盖当天备份。
+备份数据库文件，按日期命名（如 `mepass-2026-04-27.db`），同一天重复执行覆盖当天备份。
 
 ## 命令参考
 
@@ -211,7 +214,7 @@ mepass init
 mepass add --type <account|email|api_key|note>
 mepass add -a|-e|-k|-n
 mepass list [--type type] [--tag tag] [--query keyword] [--limit n] [--offset n] [--json]
-mepass get <keyword|short_id> [--type type] [--copy password|apikey|note] [--json]
+mepass get <keyword|short_id> [--type type] [--reveal] [--copy password|apikey|note] [--json]
 mepass edit --id short_id
 mepass delete --id short_id
 mepass status
@@ -246,9 +249,19 @@ mepass backup
 
 主要文件：
 
-- `mepass.db`：SQLite 数据库。
+- `mepass.db`：SQLite 数据库（sql.js 驱动，纯 JS 实现，无需 native 编译）。
 - `config.json`：非敏感配置。
 - `vault.key`：系统钥匙串不可用时的本机密钥兜底文件。
+
+## 密钥存储
+
+| 平台 | 方式 | 说明 |
+| --- | --- | --- |
+| macOS | Keychain | 通过 `security` CLI 读写 |
+| Linux | Secret Service | 通过 `secret-tool` 读写（需 GNOME Keyring 或 KDE Wallet） |
+| Windows | CliXml 文件 | 通过 PowerShell `Export-CliXml` 加密存储，非系统 Credential Manager |
+
+系统钥匙串不可用时自动降级为本地 `vault.key` 文件（权限 0600）。
 
 ## 安全说明
 
@@ -257,6 +270,9 @@ mepass backup
 - 数据库中保存的是加密后的数据密钥，迁移到新设备后可通过主密码解锁。
 - 本机日常免输入依赖系统钥匙串或 `vault.key`。
 - mePass 不上传数据，不提供云同步；用户可自行备份或同步 `mepass.db`。
+- 数据库写入采用原子操作（先写临时文件，再 rename）。
+- 启动时自动验证本地缓存密钥是否与数据库匹配。
+- 剪贴板 60 秒自动清空，仅当内容未被用户替换时生效。
 
 ## 开发
 
@@ -288,9 +304,8 @@ npm run dev
 
 - [产品设计说明书](docs/product-design.md)
 - [技术方案文档](docs/technical-solution.md)
-- [测试报告](docs/test-report.md)
+- [CLI 使用文档](docs/cli-reference.md)
 
 ## License
 
 ISC
-

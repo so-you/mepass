@@ -1,8 +1,8 @@
 import { password } from '@inquirer/prompts'
 import type { Database } from 'sql.js'
-import { getKey, saveKey } from '../core/key-store.js'
+import { getKey, saveKey, deleteKey } from '../core/key-store.js'
 import { getMeta, isInitialized, hasEncryptedDataKey } from '../db/entries-repository.js'
-import { deriveKeyEncryptionKey, decryptDataKey } from '../core/crypto.js'
+import { deriveKeyEncryptionKey, decryptDataKey, decryptText } from '../core/crypto.js'
 import { MePassError } from '../types/entry.js'
 import { setMeta } from '../db/entries-repository.js'
 import { saveDb } from '../db/connection.js'
@@ -44,7 +44,12 @@ export async function ensureDataKey(db: Database): Promise<EnsureKeyResult | nul
 
   const localKey = await getKey()
   if (localKey) {
-    return { dataKey: localKey }
+    if (verifyKeyCheck(db, localKey)) {
+      return { dataKey: localKey }
+    }
+    // 本地密钥无效（可能是旧数据库迁移），清除并引导重新绑定
+    await deleteKey()
+    console.log('本机密钥与当前数据库不匹配，请输入主密码以重新绑定。')
   }
 
   if (!hasEncryptedDataKey(db)) {
@@ -84,4 +89,22 @@ export async function ensureDataKey(db: Database): Promise<EnsureKeyResult | nul
 
   console.log('解锁成功，已绑定当前设备。')
   return { dataKey, rebinded: true }
+}
+
+function verifyKeyCheck(db: Database, dataKey: Buffer): boolean {
+  const cipher = getMeta(db, 'key_check_cipher')
+  const iv = getMeta(db, 'key_check_iv')
+  const authTag = getMeta(db, 'key_check_auth_tag')
+
+  if (!cipher || !iv || !authTag) {
+    // 没有 key_check（旧版数据库），跳过验证
+    return true
+  }
+
+  try {
+    const plain = decryptText({ cipher, iv, authTag }, dataKey)
+    return plain === 'mepass-key-check'
+  } catch {
+    return false
+  }
 }

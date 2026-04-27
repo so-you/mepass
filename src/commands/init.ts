@@ -1,7 +1,7 @@
 import { input, password, confirm } from '@inquirer/prompts'
 import { getDb } from '../db/connection.js'
 import { ensureDataDir, getDataDir, getDbPath, getConfigPath } from '../platform/paths.js'
-import { generateDataKey, generateSalt, deriveKeyEncryptionKey, encryptDataKey } from '../core/crypto.js'
+import { generateDataKey, generateSalt, deriveKeyEncryptionKey, encryptDataKey, encryptText } from '../core/crypto.js'
 import { saveKey, getSource } from '../core/key-store.js'
 import { setMeta, isInitialized } from '../db/entries-repository.js'
 import { KDF_DEFAULTS } from '../types/entry.js'
@@ -46,6 +46,12 @@ export async function initCommand(): Promise<void> {
   setMeta(db, 'encrypted_data_key_cipher', encryptedDataKey.cipher)
   setMeta(db, 'encrypted_data_key_iv', encryptedDataKey.iv)
   setMeta(db, 'encrypted_data_key_auth_tag', encryptedDataKey.authTag)
+
+  // 写入 key_check：用 dataKey 加密已知明文，用于验证本地缓存的 key 是否有效
+  const keyCheck = encryptText('mepass-key-check', dataKey)
+  setMeta(db, 'key_check_cipher', keyCheck.cipher)
+  setMeta(db, 'key_check_iv', keyCheck.iv)
+  setMeta(db, 'key_check_auth_tag', keyCheck.authTag)
 
   console.log('')
   console.log('初始化完成！')

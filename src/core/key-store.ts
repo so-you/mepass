@@ -121,3 +121,20 @@ export async function getSource(): Promise<KeyStoreSource> {
   if (fromFile) return 'local-key-file'
   return 'local-key-file'
 }
+
+export async function deleteKey(): Promise<void> {
+  try {
+    if (isMacos()) {
+      execSync(`security delete-generic-password -s "${SERVICE_NAME}" -a "${ACCOUNT_NAME}"`, { stdio: 'pipe' })
+    } else if (isLinux()) {
+      execSync(`secret-tool clear service "${SERVICE_NAME}" account "${ACCOUNT_NAME}"`, { stdio: 'pipe' })
+    } else if (isWindows()) {
+      const xmlPath = getConfigPath().replace('config.json', 'mepass-credential.xml')
+      if (fs.existsSync(xmlPath)) fs.unlinkSync(xmlPath)
+    }
+  } catch {
+    // ignore if not found
+  }
+  const keyPath = getVaultKeyPath()
+  if (fs.existsSync(keyPath)) fs.unlinkSync(keyPath)
+}

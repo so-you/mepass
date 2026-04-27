@@ -34,7 +34,9 @@ export async function getDb(customPath?: string): Promise<Database> {
 export function saveDb(): void {
   if (!dbInstance || !dbPath) return
   const data = dbInstance.export()
-  fs.writeFileSync(dbPath, Buffer.from(data))
+  const tmpPath = dbPath + '.tmp'
+  fs.writeFileSync(tmpPath, Buffer.from(data))
+  fs.renameSync(tmpPath, dbPath)
 }
 
 export function closeDb(): void {
